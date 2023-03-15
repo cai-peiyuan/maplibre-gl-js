@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>MapLibre GL JS debug page</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel='stylesheet' href='../../../dist/topsmap-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, #map {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+<div id='map'></div>
+
+<script src='../../../dist/topsmap-gl-dev.js'></script>
+<script src='js/topsmap-config.js'></script>
+<script src='js/echarts.min-4.9.0.js'></script>
+<script src='js/echarts-gl-1.1.1.js'></script>
+<script src='js/template-1.0.js'></script>
+<script src='js/weibo.js'></script>
+<script src='js/weather-data.js'></script>
+
+<script>
+
+    weiboData = weiboData.map(function (serieData, idx) {
+        var px = serieData[0] / 1000;
+        var py = serieData[1] / 1000;
+        var res = [
+            [px, py]
+        ];
+
+        for (var i = 2; i < serieData.length; i += 2) {
+            var dx = serieData[i] / 1000;
+            var dy = serieData[i + 1] / 1000;
+            var x = px + dx;
+            var y = py + dy;
+            res.push([x.toFixed(2), y.toFixed(2), 1]);
+
+            px = x;
+            py = y;
+        }
+        return res;
+    });
+
+    topsmapgl.accessToken = 'ec85d3648154874552835438ac6a02b2';
+    var map = window.map = new topsmapgl.Map({
+        container: 'map',
+        center: [116.2569, 39.9232],
+        zoom: 10,
+        //style: 'topsmap79w.json',
+        style: 'topsmap://styles/topsmap79w',
+        hash: true,
+        accessToken: 'ec85d3648154874552835438ac6a02b2' //map options
+    });
+
+    map.on('load', function () {
+        var convertData = function (data) {
+            var res = [];
+            for (var i = 0; i < data.length; i++) {
+                var geoCoord = geoCoordMap[data[i].name];
+                if (geoCoord) {
+                    res.push({
+                        name: data[i].name,
+                        value: geoCoord.concat(data[i].value)
+                    });
+                }
+            }
+            return res;
+        };
+        option = {
+            title: {
+                text: '全国主要城市空气质量',
+                subtext: 'data from PM25.in',
+                sublink: 'http://www.pm25.in',
+                left: 'center',
+                textStyle: {
+                    color: '#fff'
+                }
+            },
+            tooltip: {
+                trigger: 'item'
+            },
+            legend: {
+                orient: 'vertical',
+                y: 'bottom',
+                x: 'right',
+                data: ['pm2.5'],
+                textStyle: {
+                    color: '#fff'
+                }
+            },
+            GLMap: {},
+            series: [{
+                name: 'pm2.5',
+                type: 'scatter',
+                coordinateSystem: 'GLMap',
+                data: convertData(data),
+                symbolSize: function (val) {
+                    return val[2] / 10;
+                },
+                label: {
+                    normal: {
+                        formatter: '{b}',
+                        position: 'right',
+                        show: false
+                    },
+                    emphasis: {
+                        show: true
+                    }
+                },
+                itemStyle: {
+                    normal: {
+                        color: '#ddb926'
+                    }
+                },
+                animation: false
+            }, {
+                name: 'Top 5',
+                type: 'effectScatter',
+                coordinateSystem: 'GLMap',
+                data: convertData(data.sort(function (a, b) {
+                    return b.value - a.value;
+                }).slice(0, 5)),
+                symbolSize: function (val) {
+                    return val[2] / 10;
+                },
+                showEffectOn: 'render',
+                rippleEffect: {
+                    brushType: 'stroke'
+                },
+                hoverAnimation: true,
+                label: {
+                    normal: {
+                        formatter: '{b}',
+                        position: 'right',
+                        show: true
+                    }
+                },
+                itemStyle: {
+                    normal: {
+                        color: '#f4e925',
+                        shadowBlur: 10,
+                        shadowColor: '#333'
+                    }
+                },
+                zlevel: 1,
+                animation: false
+            }]
+        };
+        var echartslayer = Template.create({map: map, type: 'od'});
+        echartslayer.chart.setOption(option);
+    })
+
+    map.addControl(new topsmapgl.ScaleControl({unit: 'metric'}));
+    map.addControl(new topsmapgl.NavigationControl());
+    map.addControl(new topsmapgl.NavControl({
+        showZoom: true,
+        showCompass: true
+    }));
+
+</script>
+</body>
+</html>

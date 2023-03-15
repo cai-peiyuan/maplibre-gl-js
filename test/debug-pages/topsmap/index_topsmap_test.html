@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>MapLibre GL JS debug page</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel='stylesheet' href='../../../dist/topsmap-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, #map {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+<div id='map'></div>
+
+<script src='../../../dist/topsmap-gl-dev.js'></script>
+<script src='js/topsmap-config.js'></script>
+
+<script>
+
+    topsmapgl.accessToken = 'ec85d3648154874552835438ac6a02b2';
+    var map = window.map = new topsmapgl.Map({
+        container: 'map',
+        center: [116.2569, 39.9232],
+        zoom: 10,
+        //style: 'topsmap79w.json',
+        style: {version: 8, sources: {}, layers: []},
+        hash: true,
+        accessToken: 'ec85d3648154874552835438ac6a02b2' //map options
+    });
+
+    map.on('load', function () {
+        console.log('topsmapgl loaded..')
+
+
+        map.addSource('hillshadeSource', {
+            type: 'raster-dem',
+            url: 'http://localhost:9966/test/debug-pages/topsmap/js/terrain-tiles.json',
+            tileSize: 256
+        })
+        map.addSource('satellite', {
+            "type": "raster",
+            "tiles": ["https://webst03.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}"],
+            "tileSize": 256
+        })
+        map.addSource('terrainSource', {
+            type: 'raster-dem',
+            url: 'http://localhost:9966/test/debug-pages/topsmap/js/terrain-tiles.json',
+            tileSize: 256
+        })
+        let rasterLayer = {
+            "id": 'traffic-raster',
+            "type": "raster",
+            "source": 'satellite'
+        }
+        map.addLayer(rasterLayer);
+
+
+        map.addLayer({
+            id: 'hills',
+            type: 'hillshade',
+            source: 'hillshadeSource',
+            layout: {visibility: 'visible'},
+            paint: {'hillshade-shadow-color': '#473B24'}
+        });
+
+        map.setTerrain({
+            source: 'terrainSource',
+            exaggeration: 1
+        });
+    });
+
+    map.addControl(new topsmapgl.ScaleControl({unit: 'metric'}));
+    map.addControl(new topsmapgl.NavigationControl());
+    map.addControl(new topsmapgl.NavControl({
+        showZoom: true,
+        showCompass: true
+    }));
+
+    map.addControl(
+        new topsmapgl.TerrainControl({
+            source: 'terrainSource',
+            exaggeration: 1
+        })
+    );
+
+</script>
+</body>
+</html>

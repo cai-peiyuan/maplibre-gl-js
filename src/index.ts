@@ -2,6 +2,7 @@ import {supported} from '@mapbox/mapbox-gl-supported';
 import packageJSON from '../package.json' assert {type: 'json'};
 import Map from './ui/map';
 import NavigationControl from './ui/control/navigation_control';
+import NavControl from './ui/control/nav_control';
 import GeolocateControl from './ui/control/geolocate_control';
 import AttributionControl from './ui/control/attribution_control';
 import LogoControl from './ui/control/logo_control';
@@ -42,6 +43,7 @@ const exported = {
     getRTLTextPluginStatus,
     Map,
     NavigationControl,
+    NavControl,
     GeolocateControl,
     AttributionControl,
     LogoControl,
@@ -140,6 +142,44 @@ const exported = {
 
     set maxParallelImageRequests(numRequests: number) {
         config.MAX_PARALLEL_IMAGE_REQUESTS = numRequests;
+    },
+
+    get accessToken(): string {
+        return config.ACCESS_TOKEN;
+    },
+
+    set accessToken(token: string) {
+        config.ACCESS_TOKEN = token;
+    },
+
+    get baseApiUrl(): string {
+        return config.API_URL;
+    },
+
+    set baseApiUrl(url: string) {
+        config.API_URL = url;
+    },
+
+
+    /**
+     * Clears browser storage used by this library. Using this method flushes the MapLibre tile
+     * cache that is managed by this library. Tiles may still be cached by the browser
+     * in some cases.
+     *
+     * This API is supported on browsers where the [`Cache` API](https://developer.mozilla.org/en-US/docs/Web/API/Cache)
+     * is supported and enabled. This includes all major browsers when pages are served over
+     * `https://`, except Internet Explorer and Edge Mobile.
+     *
+     * When called in unsupported browsers or environments (private or incognito mode), the
+     * callback will be called with an error argument.
+     *
+     * @function clearStorage
+     * @param {Function} callback Called with an error argument if there is an error.
+     * @example
+     * maplibregl.clearStorage();
+     */
+    clearStorage(callback?: (err?: Error | null) => void) {
+     //   clearTileCache(callback);
     },
 
     get workerUrl(): string {

@@ -1,4 +1,6 @@
-const defaultLocale = {
+import {extend} from '../util/util';
+
+let defaultLocale = {
     'AttributionControl.ToggleAttribution': 'Toggle attribution',
     'AttributionControl.MapFeedback': 'Map feedback',
     'FullscreenControl.Enter': 'Enter fullscreen',
@@ -17,5 +19,9 @@ const defaultLocale = {
     'TerrainControl.enableTerrain': 'Enable terrain',
     'TerrainControl.disableTerrain': 'Disable terrain'
 };
-
+defaultLocale = extend({}, defaultLocale, {
+    'NavControl.ResetBearing': 'Reset bearing to north',
+    'NavControl.ZoomIn': 'Zoom in',
+    'NavControl.ZoomOut': 'Zoom out'
+})
 export default defaultLocale;

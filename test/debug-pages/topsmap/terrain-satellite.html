@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MapLibre GL JS debug page for terrian</title>
+    <meta charset="utf-8"/>
+    <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <link rel='stylesheet' href='../../../dist/topsmap-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body,
+        #map {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+<div id="map"></div>
+
+<script src='../../../dist/topsmap-gl-dev.js'></script>
+<script src='js/topsmap-config.js'></script>
+<script>
+    var map = (window.map = new topsmapgl.Map({
+        container: 'map',
+        zoom: 12.56,
+        center: [116.50968755, 40.52019449],
+        pitch: 60,
+        hash: true,
+        style: 'topsmap://styles/topsmap79w',
+        maxZoom: 18,
+        maxPitch: 85,
+    }));
+
+    map.addControl(
+        new topsmapgl.NavigationControl({
+            visualizePitch: true,
+            showZoom: true,
+            showCompass: true,
+        })
+    );
+    map.on('load', function () {
+        console.log('topsmapgl loaded..');
+        map.addSource('sat', {
+            type: 'raster',
+            tiles: ['https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}'],
+            tileSize: 256,
+            attribution: '&copy; google Contributors',
+            maxzoom: 20
+        })
+        map.addSource('terrainSource', {
+            type: 'raster-dem',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            encoding: 'terrarium',
+            attribution: '&copy; amazonaws Contributors',
+            maxzoom: 20
+        });
+        map.addLayer({
+            id: 'sat',
+            type: 'raster',
+            source: 'sat',
+            layout: {visibility: 'visible'}
+        });
+
+
+        // map.addLayer({
+        //     id: 'hills',
+        //     type: 'hillshade',
+        //     source: 'terrainSource',
+        //     layout: {visibility: 'visible'},
+        //     paint: {'hillshade-shadow-color': '#473B24'}
+        // });
+
+        map.setTerrain({
+            source: 'terrainSource',
+            exaggeration: 1
+        });
+    });
+
+    map.addControl(
+        new topsmapgl.TerrainControl({
+            source: 'terrainSource',
+            exaggeration: 1,
+        })
+    );
+</script>
+</body>
+</html>

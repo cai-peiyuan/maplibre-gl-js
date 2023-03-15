@@ -1,0 +1,30 @@
+{
+    "tiles1": [
+        "http://192.168.124.8:8000/{z}-{x}-{y}.png"
+    ],
+    "tiles": [
+        "http://121.36.99.212:25000/tile/{z}/{x}/{y}?layer=BJDEM"
+    ],
+    "name": "terrain dem raster tile data",
+    "format": "png",
+    "basename": "terrain dem raster tile data",
+    "id": "terrain dem raster tile data",
+    "description": "terrain dem raster tile data",
+    "version": "1",
+    "type": "baselayer",
+    "attribution": "<a href=\"https://www.topsmap.com\">TOPSMAP 2022</a>",
+    "minzoom": 0,
+    "maxzoom": 12,
+    "bounds": [
+        -180,
+        -85.05112877980659,
+        180,
+        85.0511287798066
+    ],
+    "center": [
+        0,
+        0,
+        6
+    ],
+    "tilejson": "2.0.0"
+}

@@ -1,4 +1,5 @@
 import {extend, bindAll, warnOnce, uniqueId, isImageBitmap} from '../util/util';
+import config from '../util/config';
 import browser from '../util/browser';
 import DOM from '../util/dom';
 import packageJSON from '../../package.json' assert {type: 'json'};
@@ -64,7 +65,7 @@ import type {ControlPosition, IControl} from './control/control';
 import type {MapGeoJSONFeature} from '../util/vectortile_to_geojson';
 import Terrain from '../render/terrain';
 import RenderToTexture from '../render/render_to_texture';
-
+import {districtSearch, driving, geocoder, poiSearch, walking} from '../util/msp_api/msp_api';
 const version = packageJSON.version;
 /* eslint-enable no-use-before-define */
 export type MapOptions = {
@@ -113,6 +114,7 @@ export type MapOptions = {
     style: StyleSpecification | string;
     pitchWithRotate?: boolean;
     pixelRatio?: number;
+    accessToken?: string;
 };
 
 export type GestureOptions = {
@@ -175,7 +177,7 @@ const defaultOptions = {
 
     hash: false,
     attributionControl: true,
-    maplibreLogo: false,
+    maplibreLogo: true,
 
     failIfMajorPerformanceCaveat: false,
     preserveDrawingBuffer: false,
@@ -186,7 +188,9 @@ const defaultOptions = {
     localIdeographFontFamily: 'sans-serif',
     transformRequest: null,
     fadeDuration: 300,
-    crossSourceCollisions: true
+    crossSourceCollisions: true,
+
+    accessToken: ''
 } as CompleteMapOptions;
 
 /**
@@ -298,7 +302,7 @@ class Map extends Camera {
     _container: HTMLElement;
     _canvasContainer: HTMLElement;
     _controlContainer: HTMLElement;
-    _controlPositions: {[_: string]: HTMLElement};
+    _controlPositions: { [_: string]: HTMLElement };
     _interactive: boolean;
     _cooperativeGestures: boolean | GestureOptions;
     _cooperativeGesturesScreen: HTMLElement;
@@ -340,6 +344,15 @@ class Map extends Camera {
     _removed: boolean;
     _clickTolerance: number;
     _pixelRatio: number;
+    /**
+     * 路况显示的相关方法变量
+     */
+    _trafficLayerId: any;
+    _intervalFunc: any;
+    _intervalFuncTraffic: any;
+
+    accessToken: string;
+
     _terrainDataCallback: (e: MapStyleDataEvent | MapSourceDataEvent) => void;
 
     /** image queue throttling handle. To be used later when clean up */
@@ -438,11 +451,8 @@ class Map extends Camera {
         this._locale = extend({}, defaultLocale, options.locale);
         this._clickTolerance = options.clickTolerance;
         this._pixelRatio = options.pixelRatio ?? devicePixelRatio;
-
+        this._requestManager = new RequestManager(options.transformRequest, options.accessToken);
         this._imageQueueHandle = ImageRequest.addThrottleControl(() => this.isMoving());
-
-        this._requestManager = new RequestManager(options.transformRequest);
-
         if (typeof options.container === 'string') {
             this._container = document.getElementById(options.container);
             if (!this._container) {
@@ -781,7 +791,9 @@ class Map extends Camera {
      * @example
      * var minZoom = map.getMinZoom();
      */
-    getMinZoom() { return this.transform.minZoom; }
+    getMinZoom() {
+        return this.transform.minZoom;
+    }
 
     /**
      * Sets or clears the map's maximum zoom level.
@@ -816,7 +828,9 @@ class Map extends Camera {
      * @example
      * var maxZoom = map.getMaxZoom();
      */
-    getMaxZoom() { return this.transform.maxZoom; }
+    getMaxZoom() {
+        return this.transform.maxZoom;
+    }
 
     /**
      * Sets or clears the map's minimum pitch.
@@ -851,7 +865,9 @@ class Map extends Camera {
      *
      * @returns {number} minPitch
      */
-    getMinPitch() { return this.transform.minPitch; }
+    getMinPitch() {
+        return this.transform.minPitch;
+    }
 
     /**
      * Sets or clears the map's maximum pitch.
@@ -886,7 +902,9 @@ class Map extends Camera {
      *
      * @returns {number} maxPitch
      */
-    getMaxPitch() { return this.transform.maxPitch; }
+    getMaxPitch() {
+        return this.transform.maxPitch;
+    }
 
     /**
      * Returns the state of `renderWorldCopies`. If `true`, multiple copies of the world will be rendered side by side beyond -180 and 180 degrees longitude. If set to `false`:
@@ -899,7 +917,9 @@ class Map extends Camera {
      * var worldCopiesRendered = map.getRenderWorldCopies();
      * @see [Render world copies](https://maplibre.org/maplibre-gl-js-docs/example/render-world-copies/)
      */
-    getRenderWorldCopies() { return this.transform.renderWorldCopies; }
+    getRenderWorldCopies() {
+        return this.transform.renderWorldCopies;
+    }
 
     /**
      * Sets the state of `renderWorldCopies`.
@@ -1010,7 +1030,7 @@ class Map extends Camera {
     _createDelegatedListener(type: MapEvent | string, layerId: string, listener: Listener): {
         layer: string;
         listener: Listener;
-        delegates: {[type in keyof MapEventType]?: (e: any) => void};
+        delegates: { [type in keyof MapEventType]?: (e: any) => void };
     } {
         if (type === 'mouseenter' || type === 'mouseover') {
             let mousein = false;
@@ -1843,24 +1863,32 @@ class Map extends Camera {
      * @see Use `ImageData`: [Add a generated icon to the map](https://maplibre.org/maplibre-gl-js-docs/example/add-image-generated/)
      */
     addImage(id: string,
-        image: HTMLImageElement | ImageBitmap | ImageData | {
-            width: number;
-            height: number;
-            data: Uint8Array | Uint8ClampedArray;
-        } | StyleImageInterface,
-        {
-            pixelRatio = 1,
-            sdf = false,
-            stretchX,
-            stretchY,
-            content
-        }: Partial<StyleImageMetadata> = {}) {
+             image: HTMLImageElement | ImageBitmap | ImageData | {
+                 width: number;
+                 height: number;
+                 data: Uint8Array | Uint8ClampedArray;
+             } | StyleImageInterface,
+             {
+                 pixelRatio = 1,
+                 sdf = false,
+                 stretchX,
+                 stretchY,
+                 content
+             }: Partial<StyleImageMetadata> = {}) {
         this._lazyInitEmptyStyle();
         const version = 0;
 
         if (image instanceof HTMLImageElement || isImageBitmap(image)) {
             const {width, height, data} = browser.getImageData(image);
-            this.style.addImage(id, {data: new RGBAImage({width, height}, data), pixelRatio, stretchX, stretchY, content, sdf, version});
+            this.style.addImage(id, {
+                data: new RGBAImage({width, height}, data),
+                pixelRatio,
+                stretchX,
+                stretchY,
+                content,
+                sdf,
+                version
+            });
         } else if (image.width === undefined || image.height === undefined) {
             return this.fire(new ErrorEvent(new Error(
                 'Invalid arguments to map.addImage(). The second argument must be an `HTMLImageElement`, `ImageData`, `ImageBitmap`, ' +
@@ -1905,11 +1933,11 @@ class Map extends Camera {
      * if (map.hasImage('cat')) map.updateImage('cat', './other-cat-icon.png');
      */
     updateImage(id: string,
-        image: HTMLImageElement | ImageBitmap | ImageData | {
-            width: number;
-            height: number;
-            data: Uint8Array | Uint8ClampedArray;
-        } | StyleImageInterface) {
+                image: HTMLImageElement | ImageBitmap | ImageData | {
+                    width: number;
+                    height: number;
+                    data: Uint8Array | Uint8ClampedArray;
+                } | StyleImageInterface) {
 
         const existingImage = this.style.getImage(id);
         if (!existingImage) {
@@ -2140,11 +2168,210 @@ class Map extends Camera {
      * @see [Add a vector tile source](https://maplibre.org/maplibre-gl-js-docs/example/vector-source/)
      * @see [Add a WMS source](https://maplibre.org/maplibre-gl-js-docs/example/wms/)
      */
-    addLayer(layer: (LayerSpecification & {source?: string | SourceSpecification}) | CustomLayerInterface, beforeId?: string) {
+    addLayer(layer: (LayerSpecification & { source?: string | SourceSpecification }) | CustomLayerInterface, beforeId?: string) {
         this._lazyInitEmptyStyle();
         this.style.addLayer(layer, beforeId);
         return this._update(true);
     }
+
+    /**
+     * 路况显示方法.
+     * @param show
+     * @param optionsObj
+     * @returns {Map}
+     * @example
+     */
+    trafficLayer(show: boolean, optionsObj: Object) {
+        const _this = this;
+        //生成默认配置
+        const options = extend({}, {
+            minzoom: 1, //最小级别
+            maxzoom: 24,  //最大级别
+            type: 'vector',  //路况图层类型 默认矢量
+            refresh: 120 * 1000, // 刷新时间,默认2分钟
+            before: '',   //所在**图层之前
+            layerid: 'layer-traffic-amap',
+            animation: false
+        }, optionsObj);
+        //设置全局layerid
+        this._trafficLayerId = options.layerid;
+        if (!show) { //是否显示路况  隐藏
+            /*if (this.getLayer(options.sourceid)) {
+                this.removeLayer(options.sourceid);
+            }
+            if (this.getSource(options.sourceid)) {
+                this.removeSource(options.sourceid);
+            }*/
+            if (this._intervalFunc) { //清除路况刷新定时器
+                clearInterval(this._intervalFunc);
+            }
+            if (this._intervalFuncTraffic) {
+                clearInterval(this._intervalFuncTraffic);
+            }
+            //删除原有路况
+            this.removeLayerAndSource(this._trafficLayerId);
+        } else {
+            //this._trafficLayerId = options.layerid;
+            if (this.getSource(this._trafficLayerId) || this.getLayer(this._trafficLayerId)) {
+                //重复调用显示路况方法，清除原有叠加路况
+                if (this._intervalFunc) {
+                    clearInterval(this._intervalFunc);
+                }
+                if (this._intervalFuncTraffic) {
+                    clearInterval(this._intervalFuncTraffic);
+                }
+                this.removeLayerAndSource(this._trafficLayerId);
+            }
+            if (!this.getSource(this._trafficLayerId) && !this.getLayer(this._trafficLayerId)) {
+                if (options.type === 'vector') {
+                    //定义路况图层属性
+                    const trafficLayerStyle = {
+                        "id": this._trafficLayerId,
+                        "type": "line",
+                        "metadata": {},
+                        "source": typeof options.source !== 'undefined' ? options.source : config.TRAFFIC_SOURCE.vector,
+                        "source-layer": "vectortraffic",
+                        "minzoom": options.minzoom,
+                        "maxzoom": options.maxzoom,
+                        "layout": {
+                            "line-cap": "round",
+                            "line-join": "round",
+                            "visibility": "visible"
+                        },
+                        "paint": {
+                            "line-color": {
+                                "property": "traffic_status",
+                                "type": "categorical",
+                                "stops": [
+                                    [
+                                        {
+                                            "zoom": 10,
+                                            "value": 1
+                                        },
+                                        "rgba(19, 134, 22, 1)"
+                                    ],
+                                    [
+                                        {
+                                            "zoom": 10,
+                                            "value": 2
+                                        },
+                                        "rgba(222, 161, 29, 1)"
+                                    ],
+                                    [
+                                        {
+                                            "zoom": 10,
+                                            "value": 3
+                                        },
+                                        "rgba(222, 29, 29, 1)"
+                                    ],
+                                    [
+                                        {
+                                            "zoom": 10,
+                                            "value": 4
+                                        },
+                                        "rgba(98, 3, 3, 1)"
+                                    ],
+                                    [
+                                        {
+                                            "zoom": 10,
+                                            "value": 5
+                                        },
+                                        "rgba(124, 124, 122, 1)"
+                                    ]
+                                ],
+                                "default": "rgba(19, 134, 22, 1)"
+                            },
+                            "line-width": {
+                                "stops": [
+                                    [
+                                        8,
+                                        2
+                                    ],
+                                    [
+                                        10,
+                                        2.2
+                                    ],
+                                    [
+                                        15,
+                                        3
+                                    ]
+                                ]
+                            },
+                        }
+                    };
+                    //添加路况图层
+                    this.addLayer(extend({}, trafficLayerStyle), options.before);
+                    this._intervalFunc = setInterval(() => {
+                        _this.removeLayerAndSource(_this._trafficLayerId);
+                        _this.addLayer(extend({}, trafficLayerStyle), options.before);
+                    }, options.refresh);
+
+                    //矢量路况设置流动效果
+                    if (options.animation) {
+                        const dashLength = 0.01;
+                        const gapLength = 4;
+                        let valueOne, valueTwo, valueThree, valueFour, ValueFive;
+                        const totalNumberOfSteps = 20;
+                        const dashSteps = totalNumberOfSteps * dashLength / (gapLength + dashLength); //4
+                        const gapSteps = totalNumberOfSteps - dashSteps; //16
+                        let currentStep = 20;
+                        this._intervalFuncTraffic = setInterval(() => {
+                            currentStep = currentStep - 1;
+                            if (currentStep <= 0) {
+                                currentStep = 20;
+                            }
+                            if (currentStep < dashSteps) {
+                                valueOne = currentStep / dashSteps;
+                                valueTwo = (1 - valueOne) * dashLength; //3 2 1
+                                valueThree = gapLength;//16 16 16
+                                valueFour = valueOne * dashLength; //1 2 3
+                                ValueFive = 0;
+                            } else {
+                                valueOne = (currentStep - dashSteps) / (gapSteps);//0
+                                valueTwo = 0; ///0
+                                valueThree = (1 - valueOne) * gapLength;
+                                valueFour = dashLength;
+                                ValueFive = valueOne * gapLength;
+                            }
+                            const arr = [];
+                            arr.push(valueTwo, valueThree, valueFour, ValueFive);
+                            _this.setPaintProperty("layer-traffic-amap", "line-dasharray", arr);
+                        }, 60);
+                    }
+                }
+
+                if (options.type === 'raster') {
+                    const trafficLayerStyle = {
+                        "id": this._trafficLayerId,
+                        "type": "raster",
+                        "source": typeof options.source !== 'undefined' ? options.source : config.TRAFFIC_SOURCE.raster
+                    };
+                    trafficLayerStyle.source.tileSize = Number(trafficLayerStyle.source.tileSize);
+                    this.addLayer(extend({}, trafficLayerStyle), options.before);
+                    this._intervalFunc = setInterval(() => {
+                        _this.removeLayerAndSource(_this._trafficLayerId);
+                        _this.addLayer(extend({}, trafficLayerStyle), options.before);
+                    }, options.refresh);
+                }
+            }
+        }
+        return this._update(true);
+    }
+
+    /**
+     * @param layerid
+     * @example
+     * Removes the layer and the layer's source with the given ID from the map's style.
+     */
+    removeLayerAndSource(layerid: string) {
+        if (this.getLayer(layerid)) {
+            this.removeLayer(layerid);
+        }
+        if (this.getSource(layerid)) {
+            this.removeSource(layerid);
+        }
+    }
+
 
     /**
      * Moves a layer to a different z-position.
@@ -2608,6 +2835,167 @@ class Map extends Camera {
         return this._canvas;
     }
 
+    /**
+     * 地图poi点击
+     * @param show
+     * @param callback
+     */
+    poiClick(show: boolean, callback: (features: object) => void) {
+        const _this = this;
+        if (show) {
+            _this.on('mousemove', function (e) {
+                const features = _this.queryRenderedFeatures(e.point, {filter: ["==", "$type", "Point"]});
+                if (features.length > 0) {
+                    _this.getCanvas().style.cursor = 'pointer';
+                } else {
+                    _this.getCanvas().style.cursor = '';
+                }
+            });
+            _this.on('click', function (e) {
+                const features = _this.queryRenderedFeatures(e.point, {filter: ["==", "$type", "Point"]});
+                if (callback) {
+                    callback(features);
+                }
+                e.preventDefault();
+            })
+        }
+    }
+
+    /**
+     * 地图矢量图层点击
+     * @param options
+     * @param callback
+     * @example
+     */
+    layerClick(options: { show: boolean, type: string }, callback: (features: object) => void) {
+        const _this = this;
+        options = Object.assign({
+            show: false,
+            type: 'Point'
+        }, options);
+        if (options.show) {
+            this.on('mousemove', function (e) {
+                const features = _this.queryRenderedFeatures(e.point, {filter: ["==", "$type", options.type]});
+                if (features.length > 0) {
+                    this.getCanvas().style.cursor = 'pointer';
+                } else {
+                    this.getCanvas().style.cursor = '';
+                }
+            });
+            this.on('click', (e) => {
+                const features = _this.queryRenderedFeatures(e.point, {filter: ["==", "$type", options.type]});
+                if (features && callback) {
+                    callback(features);
+                }
+            });
+        }
+    }
+
+    /**
+     * 地理编码与逆地理编码
+     * @param options
+     * @param callback
+     * @example
+     */
+    Geocoder(options: Object, callback: Function) {
+        geocoder(options, callback, this.getAccessToken());
+    }
+
+    /**
+     * 地理编码与逆地理编码
+     * @param options
+     * @param callback
+     * @example
+     */
+    geocoder(options: Object, callback: Function) {
+        geocoder(options, callback, this.getAccessToken());
+    }
+
+
+    /**
+     * 行政区划查询
+     * @param options
+     * @param callback
+     * @example
+     */
+    DistrictSearch(options: Object, callback: Function) {
+        districtSearch(options, callback, this.getAccessToken());
+    }
+
+    /**
+     * 行政区划查询
+     * @param options
+     * @param callback
+     * @example
+     */
+    districtSearch(options: Object, callback: Function) {
+        districtSearch(options, callback, this.getAccessToken());
+    }
+
+    /**
+     * 车行路径规划
+     * @param options
+     * @param callback
+     * @example
+     */
+    Driving(options: Object, callback: Function) {
+        driving(options, callback, this.getAccessToken());
+    }
+
+    /**
+     * 车行路径规划
+     * @param options
+     * @param callback
+     * @example
+     */
+    driving(options: Object, callback: Function) {
+        driving(options, callback, this.getAccessToken());
+    }
+
+    /**
+     * 步行路径规划
+     * @param options
+     * @param callback
+     * @example
+     */
+    Walking(options: Object, callback: Function) {
+        walking(options, callback, this.getAccessToken());
+    }
+
+    /**
+     * 步行路径规划
+     * @param options
+     * @param callback
+     * @example
+     */
+    walking(options: Object, callback: Function) {
+        walking(options, callback, this.getAccessToken());
+    }
+
+    /**.
+     * Poi搜索（关键字、多边形、周边）.
+     * @param options
+     * @param callback
+     * @example
+     */
+    PoiSearch(options: Object, callback: Function) {
+       poiSearch(options, callback, this.getAccessToken());
+    }
+
+    /**.
+     * Poi搜索（关键字、多边形、周边）.
+     * @param options
+     * @param callback
+     * @example
+     */
+    poiSearch(options: Object, callback: Function) {
+       poiSearch(options, callback, this.getAccessToken());
+    }
+
+    getAccessToken(): string{
+        return this.accessToken || config.ACCESS_TOKEN;
+    }
+
     _containerDimensions() {
         let width = 0;
         let height = 0;
@@ -3058,7 +3446,10 @@ class Map extends Camera {
      * @example
      * map.showTileBoundaries = true;
      */
-    get showTileBoundaries(): boolean { return !!this._showTileBoundaries; }
+    get showTileBoundaries(): boolean {
+        return !!this._showTileBoundaries;
+    }
+
     set showTileBoundaries(value: boolean) {
         if (this._showTileBoundaries === value) return;
         this._showTileBoundaries = value;
@@ -3074,7 +3465,10 @@ class Map extends Camera {
      * @instance
      * @memberof Map
      */
-    get showPadding(): boolean { return !!this._showPadding; }
+    get showPadding(): boolean {
+        return !!this._showPadding;
+    }
+
     set showPadding(value: boolean) {
         if (this._showPadding === value) return;
         this._showPadding = value;
@@ -3092,7 +3486,10 @@ class Map extends Camera {
      * @instance
      * @memberof Map
      */
-    get showCollisionBoxes(): boolean { return !!this._showCollisionBoxes; }
+    get showCollisionBoxes(): boolean {
+        return !!this._showCollisionBoxes;
+    }
+
     set showCollisionBoxes(value: boolean) {
         if (this._showCollisionBoxes === value) return;
         this._showCollisionBoxes = value;
@@ -3118,7 +3515,10 @@ class Map extends Camera {
      * @instance
      * @memberof Map
      */
-    get showOverdrawInspector(): boolean { return !!this._showOverdrawInspector; }
+    get showOverdrawInspector(): boolean {
+        return !!this._showOverdrawInspector;
+    }
+
     set showOverdrawInspector(value: boolean) {
         if (this._showOverdrawInspector === value) return;
         this._showOverdrawInspector = value;
@@ -3134,16 +3534,26 @@ class Map extends Camera {
      * @instance
      * @memberof Map
      */
-    get repaint(): boolean { return !!this._repaint; }
+    get repaint(): boolean {
+        return !!this._repaint;
+    }
+
     set repaint(value: boolean) {
         if (this._repaint !== value) {
             this._repaint = value;
             this.triggerRepaint();
         }
     }
+
     // show vertices
-    get vertices(): boolean { return !!this._vertices; }
-    set vertices(value: boolean) { this._vertices = value; this._update(); }
+    get vertices(): boolean {
+        return !!this._vertices;
+    }
+
+    set vertices(value: boolean) {
+        this._vertices = value;
+        this._update();
+    }
 
     /**
      * Returns the package version of the library

@@ -1,20 +1,8 @@
-import type {RequestParameters} from './ajax';
-import config from './config';
-import {topsMapMspTransformRequestFunc} from './request/request_transform_topsmap_msp';
+import {ResourceType} from '../util/request_manager';
+import config from '../util/config';
 
-/**
- * A type of MapLibre resource.
- */
-export const enum ResourceType {
-    Glyphs = 'Glyphs',
-    Image = 'Image',
-    Source = 'Source',
-    SpriteImage = 'SpriteImage',
-    SpriteJSON = 'SpriteJSON',
-    Style = 'Style',
-    Tile = 'Tile',
-    Unknown = 'Unknown',
-}
+import type {RequestParameters} from './ajax';
+import {isMapboxURL} from './request/request_transform_topsmap_msp';
 
 export type RequestTransformFunction = (url: string, resourceType?: ResourceType) => RequestParameters;
 
@@ -27,20 +15,14 @@ type UrlObject = {
 
 export class RequestManager {
     _transformRequestFn: RequestTransformFunction;
-    _transformRequestFnTopsMap: RequestTransformFunction;
     _customAccessToken: string;
 
     constructor(transformRequestFn?: RequestTransformFunction, accessToken?: string) {
         this._transformRequestFn = transformRequestFn;
         this._customAccessToken = accessToken;
-        this._transformRequestFnTopsMap = topsMapMspTransformRequestFunc;
     }
 
     transformRequest(url: string, type: ResourceType) {
-
-        if(this._transformRequestFnTopsMap){
-            url = this._transformRequestFnTopsMap(url,type)['url'];
-        }
         if (this._transformRequestFn) {
             return this._transformRequestFn(url, type) || {url};
         }
@@ -50,21 +32,31 @@ export class RequestManager {
 
     normalizeSpriteURL(url: string, format: string, extension: string): string {
         const urlObject = parseUrl(url);
-        urlObject.path += `${format}${extension}`;
-        return formatUrl(urlObject);
+        if (urlObject.protocol == 'http' || urlObject.protocol == 'http' || urlObject.protocol == 'file') {
+            urlObject.path += `${format}${extension}`;
+            return formatUrl(urlObject);
+        } else if (urlObject.protocol == 'topsmap' || urlObject.protocol == 'mapbox') {
+            return formatProperStyleUrl(urlObject, format, extension, this._customAccessToken);
+        }
     }
 
     normalizeGlyphsURL(url: string): string {
-        return url;
+        if (!isMapboxURL(url)) {
+            return url;
+        }
+        const urlObject = parseUrl(url);
+        urlObject.path = `/fonts/v1${urlObject.path}`;
+        return formatProperGlyphsUrl(urlObject, this._customAccessToken || config.ACCESS_TOKEN);
     }
 
     setTransformRequest(transformRequest: RequestTransformFunction) {
         this._transformRequestFn = transformRequest;
     }
 
-    setTransformRequestTopsMap(transformRequest: RequestTransformFunction) {
-        this._transformRequestFnTopsMap = transformRequest;
+    setAccessToken(accessToken: string) {
+        this._customAccessToken = accessToken;
     }
+
 }
 
 const urlRe = /^(\w+):\/\/([^/?]*)(\/[^?]+)?\??(.+)?/;
@@ -85,6 +77,25 @@ function parseUrl(url: string): UrlObject {
 function formatUrl(obj: UrlObject): string {
     const params = obj.params.length ? `?${obj.params.join('&')}` : '';
     return `${obj.protocol}://${obj.authority}${obj.path}${params}`;
+}
+
+function formatProperGlyphsUrl(obj: UrlObject, accessToken: string): string {
+    const params = obj.params.length ? `${obj.params.join('&')}` : '';
+    //Request URL: http://121.36.99.212:35001/webglapi/fonts?n=sourcehansanscn-normal&r=0-255&ak=ec85d3648154874552835438ac6a02b2
+    return `${config.API_URL}/webglapi/fonts?n={fontstack}&r={range}&ak=${accessToken}&${params}`;
+}
+
+function formatProperStyleUrl(obj: UrlObject, format: string, extension: string, accessToken?: string): string {
+    if (obj.protocol == 'topsmap') {
+        let styleName = obj.path.replace('/', '');
+        let styleFileType = extension.replace('.', '');
+        const params = obj.params.length ? `${obj.params.join('&')}` : '';
+        accessToken = accessToken || config.ACCESS_TOKEN;
+        return `${config.API_URL}/webglapi/sprite?n=${styleName}${format}&e=${styleFileType}&ak=${accessToken}&${params}`;
+    } else {
+        const params = obj.params.length ? `?${obj.params.join('&')}` : '';
+        return `${obj.protocol}://${obj.authority}${obj.path}${params}`;
+    }
 }
 
 function makeAPIURL(urlObj: UrlObject, accessToken?: string | null | void): string {
@@ -111,4 +122,4 @@ function makeAPIURL(urlObj: UrlObject, accessToken?: string | null | void): stri
     return formatUrl(urlObj);
 }
 
-export {parseUrl, formatUrl, makeAPIURL}
+export {parseUrl, formatUrl, formatProperGlyphsUrl, formatProperStyleUrl, makeAPIURL}
