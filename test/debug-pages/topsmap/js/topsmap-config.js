@@ -14,7 +14,7 @@ api_config = {
         "raster": {
             "tiles": ["http://121.36.99.212:8883/img?t={z}-{x}-{y}"], "tileSize": "256", "type": "raster"
         }, "vector": {"tiles": ["http://121.36.99.212:8883/amptraffic?t={z}-{x}-{y}"], "type": "vector"}
-    }, "url": "http://121.36.99.212:35001"
+    }, "url": "http://120.48.166.81:10010"
 };
 
 topsmapgl.config.API_URL = api_config.url;
@@ -28,5 +28,5 @@ topsmapgl.config.REPORT_MAP_EVENTS = true;
 topsmapgl.config.REPORT_MAP_SESSION = true;
 
 topsmapgl.config.DEBUG = true;
-topsmapgl.accessToken = 'pk.eyJ1IjoiY2FpcGVpeXVhbiIsImEiOiJjamZ0aDY4YjIwOG5zMzBsNmdwbnFjbHg3In0.p9Mnm9HmZvc8zSFzE4peQw';
+topsmapgl.accessToken = '21d133d5154d5632b9146cec98958fa8';
 console.log(topsmapgl.config);
