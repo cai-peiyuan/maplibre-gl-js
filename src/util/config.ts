@@ -1,3 +1,6 @@
+import type {Cancelable} from '../types/cancelable';
+import type {RequestParameters, ResponseCallback} from './ajax';
+
 type Config = {
     REPORT_MAP_EVENTS: boolean, //上报地图初始化事件开关
     REPORT_MAP_SESSION: boolean, //上报地图会话开关
@@ -18,7 +21,7 @@ type Config = {
     TRAFFIC_SOURCE_: { raster: Object, vector: Object },
     MAX_PARALLEL_IMAGE_REQUESTS: number;
     MAX_PARALLEL_IMAGE_REQUESTS_PER_FRAME: number;
-    REGISTERED_PROTOCOLS: { [x: string]: any };
+    REGISTERED_PROTOCOLS: {[x: string]: (requestParameters: RequestParameters, callback: ResponseCallback<any>) => Cancelable};
     WORKER_URL: string;
 };
 let mapboxHTTPURLRegex;
