@@ -11,6 +11,7 @@ import {extend} from '../util/util';
 import {type Dispatcher} from '../util/dispatcher';
 import {TileBounds} from './tile_bounds';
 import {sleep, waitForEvent, beforeMapTest, createMap as globalCreateMap} from '../util/test/util';
+import {now} from '../util/time_control';
 
 import {type Map} from '../ui/map';
 import {type TileCache} from './tile_cache';
@@ -402,6 +403,24 @@ describe('TileManager.removeTile', () => {
         tileManager._removeTile(tileID.key);
     });
 
+    test('resets raster fade timer upon load of unloaded edge tiles', async () => {
+        const tileManager = createTileManager();
+        tileManager._rasterFadeDuration = 300;
+        let tile: Tile;
+        let endMs: number;
+        tileManager._source.loadTile = async (_tile) => {
+            tile = _tile;
+            tile.selfFading = true;
+            tile.fadeEndTime = now() + tileManager._rasterFadeDuration;
+            await sleep(100);
+            endMs = now();
+        };
+        tileManager._addTile(new OverscaledTileID(0, 0, 0, 0, 0));
+        await sleep(200);
+        const deltaMs = tile.fadeEndTime - endMs;
+        expect(deltaMs).toBeGreaterThanOrEqual(290);
+        expect(deltaMs).toBeLessThanOrEqual(310);
+    });
 });
 
 describe('TileManager / Source lifecycle', () => {
@@ -1135,14 +1154,14 @@ describe('TileManager._updateRetainedTiles', () => {
             }
 
             const retain: {[key: string]: OverscaledTileID} = {};
-            const missingTiles: {[key: string]: OverscaledTileID} = {};
+            const missingTiles = new Set<OverscaledTileID>();
 
             // mark all ideal tiles as retained and also as missing with no data for child retainment
             for (const idealID of idealTileIDs) {
                 retain[idealID.key] = idealID;
-                missingTiles[idealID.key] = idealID;
+                missingTiles.add(idealID);
             }
-            tileManager._retainLoadedChildren(missingTiles, retain);
+            tileManager._retainLoadedChildren(retain, missingTiles);
 
             expect(Object.keys(retain).sort()).toEqual(idealChildIDs.concat(idealTileIDs).map(id => id.key).sort());
         });
@@ -1155,7 +1174,7 @@ describe('TileManager._updateRetainedTiles', () => {
         };
 
         const idealTileID = new OverscaledTileID(2, 0, 2, 1, 1);
-        const idealTiles: {[key: string]: OverscaledTileID} = {[idealTileID.key]: idealTileID};
+        const idealTiles = new Set<OverscaledTileID>([idealTileID]);
 
         const children = [
             new OverscaledTileID(3, 0, 3, 2, 2),  //keep
@@ -1170,7 +1189,7 @@ describe('TileManager._updateRetainedTiles', () => {
         }
 
         const retain: {[key: string]: OverscaledTileID} = {};
-        tileManager._retainLoadedChildren(idealTiles, retain);
+        tileManager._retainLoadedChildren(retain, idealTiles);
 
         const expectedKeys = children
             .filter(child => child.overscaledZ === 3)

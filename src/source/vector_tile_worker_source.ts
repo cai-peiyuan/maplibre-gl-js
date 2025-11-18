@@ -1,7 +1,8 @@
-import {type ExpiryData, getArrayBuffer} from '../util/ajax';
-
 import Protobuf from 'pbf';
+import {VectorTile, type VectorTileLayer} from '@mapbox/vector-tile';
+import {type ExpiryData, getArrayBuffer} from '../util/ajax';
 import {WorkerTile} from './worker_tile';
+import {BoundedLRUCache} from '../tile/tile_cache';
 import {extend} from '../util/util';
 import {RequestPerformance} from '../util/performance';
 import {
@@ -9,16 +10,17 @@ import {
     decryptVectorTileBuffer
 } from '../util/tile/util';
 
+import {VectorTileOverzoomed, sliceVectorTileLayer, toVirtualVectorTile} from './vector_tile_overzoomed';
+import {MLTVectorTile} from './vector_tile_mlt';
 import type {
     WorkerSource,
     WorkerTileParameters,
     TileParameters,
     WorkerTileResult
 } from '../source/worker_source';
-
 import type {IActor} from '../util/actor';
+import type {StyleLayer} from '../style/style_layer';
 import type {StyleLayerIndex} from '../style/style_layer_index';
-import {VectorTile} from '@mapbox/vector-tile';
 
 export type LoadVectorTileResult = {
     vectorTile: VectorTile;
@@ -45,9 +47,10 @@ export class VectorTileWorkerSource implements WorkerSource {
     actor: IActor;
     layerIndex: StyleLayerIndex;
     availableImages: Array<string>;
-    fetching: { [_: string]: FetchingState };
-    loading: { [_: string]: WorkerTile };
-    loaded: { [_: string]: WorkerTile };
+    fetching: {[_: string]: FetchingState };
+    loading: {[_: string]: WorkerTile};
+    loaded: {[_: string]: WorkerTile};
+    overzoomedTileResultCache: BoundedLRUCache<string, LoadVectorTileResult>;
 
     /**
      * @param loadVectorData - Optional method for custom loading of a VectorTile
@@ -62,58 +65,47 @@ export class VectorTileWorkerSource implements WorkerSource {
         this.fetching = {};
         this.loading = {};
         this.loaded = {};
+        this.overzoomedTileResultCache = new BoundedLRUCache<string, LoadVectorTileResult>(1000);
     }
 
     /**
      * Loads a vector tile
      */
     async loadVectorTile(params: WorkerTileParameters, abortController: AbortController): Promise<LoadVectorTileResult> {
-        if (params.request.url.startsWith("http://localhost:35005")) {
-            const response = await getArrayBuffer(params.request, abortController);
-            // console.log('ecrypt pbf file response ->', response);
-            const theData: ArrayBuffer = await decryptArrayBufferByWeb(response.data);
-            try {
-                const vectorTile = new VectorTile(new Protobuf(theData));
-                return {
-                    vectorTile,
-                    rawData: theData,
-                    cacheControl: response.cacheControl || 'max-age=2592000',
-                    expires: response.expires
-                };
-            } catch (ex) {
-                const bytes = new Uint8Array(theData);
-                const isGzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
-                let errorMessage = `Unable to parse the tile at ${params.request.url}, `;
-                if (isGzipped) {
-                    errorMessage += 'please make sure the data is not gzipped and that you have configured the relevant header in the server';
-                } else {
-                    errorMessage += `got error: ${ex.message}`;
-                }
-                throw new Error(errorMessage);
-            }
-        } else {
-            // console.log('Loads a vector tile', params, abortController)
-            const response = await getArrayBuffer(params.request, abortController);
-            // console.log('pbf response ', response);
-            try {
-                const vectorTile = new VectorTile(new Protobuf(response.data));
+        const response = await getArrayBuffer(params.request, abortController);
+        try {
+            if (params.request.url.startsWith("http://localhost:35005")) {
+                const theData: ArrayBuffer = await decryptArrayBufferByWeb(response.data);
+                const vectorTile = params.encoding !== 'mlt'
+                               ? new VectorTile(new Protobuf(theData))
+                               : new MLTVectorTile(theData);
                 return {
                     vectorTile,
                     rawData: response.data,
                     cacheControl: response.cacheControl,
                     expires: response.expires
                 };
-            } catch (ex) {
-                const bytes = new Uint8Array(response.data);
-                const isGzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
-                let errorMessage = `Unable to parse the tile at ${params.request.url}, `;
-                if (isGzipped) {
-                    errorMessage += 'please make sure the data is not gzipped and that you have configured the relevant header in the server';
-                } else {
-                    errorMessage += `got error: ${ex.message}`;
-                }
-                throw new Error(errorMessage);
+            }else{
+                const vectorTile = params.encoding !== 'mlt'
+                    ? new VectorTile(new Protobuf(response.data))
+                    : new MLTVectorTile(response.data);
+                return {
+                    vectorTile,
+                    rawData: response.data,
+                    cacheControl: response.cacheControl,
+                    expires: response.expires
+                };
             }
+        } catch (ex) {
+            const bytes = new Uint8Array(response.data);
+            const isGzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
+            let errorMessage = `Unable to parse the tile at ${params.request.url}, `;
+            if (isGzipped) {
+                errorMessage += 'please make sure the data is not gzipped and that you have configured the relevant header in the server';
+            } else {
+                errorMessage += `got error: ${ex.message}`;
+            }
+            throw new Error(errorMessage);
         }
     }
 
@@ -123,7 +115,11 @@ export class VectorTileWorkerSource implements WorkerSource {
      * a `params.url` property) for fetching and producing a VectorTile object.
      */
     async loadTile(params: WorkerTileParameters): Promise<WorkerTileResult | null> {
-        const tileUid = params.uid;
+        const {uid: tileUid, overzoomParameters} = params;
+
+        if (overzoomParameters) {
+            params.request = overzoomParameters.overzoomRequest;
+        }
 
         const perf = (params && params.request && params.request.collectResourceTiming) ?
             new RequestPerformance(params.request) : false;
@@ -138,6 +134,12 @@ export class VectorTileWorkerSource implements WorkerSource {
             delete this.loading[tileUid];
             if (!response) {
                 return null;
+            }
+
+            if (overzoomParameters) {
+                const overzoomTile = this._getOverzoomTile(params, response.vectorTile);
+                response.rawData = overzoomTile.rawData;
+                response.vectorTile = overzoomTile.vectorTile;
             }
 
             const rawTileData = response.rawData;
@@ -163,7 +165,7 @@ export class VectorTileWorkerSource implements WorkerSource {
             try {
                 const result = await parsePromise;
                 // Transferring a copy of rawTileData because the worker needs to retain its copy.
-                return extend({rawTileData: rawTileData.slice(0)}, result, cacheControl, resourceTiming);
+                return extend({rawTileData: rawTileData.slice(0), encoding: params.encoding}, result, cacheControl, resourceTiming);
             } finally {
                 delete this.fetching[tileUid];
             }
@@ -173,6 +175,43 @@ export class VectorTileWorkerSource implements WorkerSource {
             this.loaded[tileUid] = workerTile;
             throw err;
         }
+    }
+
+    /**
+     * If we are seeking a tile deeper than the source's max available canonical tile, get the overzoomed tile
+     * @param params - the worker tile parameters
+     * @param maxZoomVectorTile - the original vector tile at the source's max available canonical zoom
+     * @returns the overzoomed tile and its raw data
+     */
+    private _getOverzoomTile(params: WorkerTileParameters, maxZoomVectorTile: VectorTile): LoadVectorTileResult {
+        const {tileID, source, overzoomParameters} = params;
+        const {maxZoomTileID} = overzoomParameters;
+
+        const cacheKey = `${maxZoomTileID.key}_${tileID.key}`;
+        const cachedOverzoomTile = this.overzoomedTileResultCache.get(cacheKey);
+
+        if (cachedOverzoomTile) {
+            return cachedOverzoomTile;
+        }
+
+        const overzoomedVectorTile = new VectorTileOverzoomed();
+        const layerFamilies: Record<string, StyleLayer[][]> = this.layerIndex.familiesBySource[source];
+
+        for (const sourceLayerId in layerFamilies) {
+            const sourceLayer: VectorTileLayer = maxZoomVectorTile.layers[sourceLayerId];
+            if (!sourceLayer) {
+                continue;
+            }
+
+            const slicedTileLayer = sliceVectorTileLayer(sourceLayer, maxZoomTileID, tileID.canonical);
+            if (slicedTileLayer.length > 0) {
+                overzoomedVectorTile.addLayer(slicedTileLayer);
+            }
+        }
+        const overzoomedVectorTileResult = toVirtualVectorTile(overzoomedVectorTile);
+        this.overzoomedTileResultCache.set(cacheKey, overzoomedVectorTileResult);
+
+        return overzoomedVectorTileResult;
     }
 
     /**
@@ -192,7 +231,7 @@ export class VectorTileWorkerSource implements WorkerSource {
             if (this.fetching[uid]) {
                 const {rawTileData, cacheControl, resourceTiming} = this.fetching[uid];
                 delete this.fetching[uid];
-                parseResult = extend({rawTileData: rawTileData.slice(0)}, result, cacheControl, resourceTiming);
+                parseResult = extend({rawTileData: rawTileData.slice(0), encoding: params.encoding}, result, cacheControl, resourceTiming);
             } else {
                 parseResult = result;
             }

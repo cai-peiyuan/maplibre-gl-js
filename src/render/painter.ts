@@ -145,7 +145,7 @@ export class Painter {
 
         // Within each layer there are multiple distinct z-planes that can be drawn to.
         // This is implemented using the WebGL depth buffer.
-        this.numSublayers = TileManager.maxUnderzooming + TileManager.maxOverzooming + 1;
+        this.numSublayers = TileManager.maxOverzooming + TileManager.maxUnderzooming + 1;
         this.depthEpsilon = 1 / Math.pow(2, 16);
 
         this.crossTileSymbolIndex = new CrossTileSymbolIndex();
@@ -793,8 +793,44 @@ export class Painter {
     }
 
     destroy() {
+        if (this._tileTextures) {
+            for (const size in this._tileTextures) {
+                const textures = this._tileTextures[size];
+                if (textures) {
+                    for (const texture of textures) {
+                        texture.destroy();
+                    }
+                }
+            }
+            this._tileTextures = {};
+        }
+
+        if (this.tileExtentBuffer) this.tileExtentBuffer.destroy();
+        if (this.debugBuffer) this.debugBuffer.destroy();
+        if (this.rasterBoundsBuffer) this.rasterBoundsBuffer.destroy();
+        if (this.rasterBoundsBufferPosOnly) this.rasterBoundsBufferPosOnly.destroy();
+        if (this.viewportBuffer) this.viewportBuffer.destroy();
+        if (this.tileBorderIndexBuffer) this.tileBorderIndexBuffer.destroy();
+        if (this.quadTriangleIndexBuffer) this.quadTriangleIndexBuffer.destroy();
+        if (this.tileExtentMesh) this.tileExtentMesh.vertexBuffer?.destroy();
+        if (this.tileExtentMesh) this.tileExtentMesh.indexBuffer?.destroy();
+
         if (this.debugOverlayTexture) {
             this.debugOverlayTexture.destroy();
+        }
+
+        if (this.cache) {
+            for (const key in this.cache) {
+                const program = this.cache[key];
+                if (program && program.program) {
+                    this.context.gl.deleteProgram(program.program);
+                }
+            }
+            this.cache = {};
+        }
+
+        if (this.context) {
+            this.context.setDefault();
         }
     }
 
