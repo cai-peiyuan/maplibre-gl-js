@@ -1,4 +1,3 @@
-
 /**
  * A way to identify a feature, either by string or by number
  */
@@ -61,78 +60,76 @@ function getFeatureId(feature: GeoJSON.Feature, promoteId?: string): GeoJSONFeat
 }
 
 /**
- * Returns true if the data is a valid GeoJSON object that can be updated.
+ * Converts a GeoJSON object into a map of feature IDs to GeoJSON features.
+ * @param data - The GeoJSON object to convert.
+ * @param promoteId - If set, the feature id will be set to the promoteId property value.
+ * @returns A map of feature IDs to GeoJSON features, or `undefined` if the GeoJSON object is not a valid updateable object.
  *
  * Features must have unique identifiers to be updateable. IDs can come from:
  * - The feature's `id` property (standard GeoJSON)
  * - A promoted property specified by `promoteId` (e.g., a "name" property)
  */
-export function isUpdateableGeoJSON(data: GeoJSON.GeoJSON | undefined, promoteId?: string): data is UpdateableGeoJSON {
-    // null can be updated
+export function toUpdateable(data: GeoJSON.GeoJSON | undefined, promoteId?: string): Map<GeoJSONFeatureId, GeoJSON.Feature> | undefined {
+    const updateable = new Map<GeoJSONFeatureId, GeoJSON.Feature>();
+
+    // null can be updated - empty updateable
     if (data == null) {
-        return true;
+        return updateable;
     }
 
-    // {} can be updated
+    // {} can be updated - empty updateable
     if (data.type == null) {
-        return true;
+        return updateable;
     }
 
     // a single feature with an id can be updated, need to explicitly check against null because 0 is a valid feature id that is falsy
     if (data.type === 'Feature') {
-        return getFeatureId(data, promoteId) != null;
+        const id = getFeatureId(data, promoteId);
+        if (id == null) return undefined;
+
+        updateable.set(id, data);
+        return updateable;
     }
 
-    // a feature collection can be updated if every feature has an id, and the ids are all unique
-    // this prevents us from silently dropping features if ids get reused
+    // a feature collection can be updated if every feature has a unique id, which prevents the silent dropping of features
     if (data.type === 'FeatureCollection') {
         const seenIds = new Set<GeoJSONFeatureId>();
+
         for (const feature of data.features) {
             const id = getFeatureId(feature, promoteId);
-            if (id == null) {
-                return false;
-            }
+            if (id == null) return undefined;
 
-            if (seenIds.has(id)) {
-                return false;
-            }
-
+            if (seenIds.has(id)) return undefined;
             seenIds.add(id);
+
+            updateable.set(id, feature);
         }
 
-        return true;
+        return updateable;
     }
 
-    return false;
-}
-
-export function toUpdateable(data: UpdateableGeoJSON, promoteId?: string) {
-    const result = new Map<GeoJSONFeatureId, GeoJSON.Feature>();
-    if (data == null || data.type == null) {
-        // empty result
-    } else if (data.type === 'Feature') {
-        result.set(getFeatureId(data, promoteId)!, data);
-    } else {
-        for (const feature of data.features) {
-            result.set(getFeatureId(feature, promoteId)!, feature);
-        }
-    }
-
-    return result;
+    return undefined;
 }
 
 /**
- * Mutates updateable and applies a GeoJSONSourceDiff. Operations are processed in a specific order to ensure predictable behavior:
+ * Mutates updateable and applies a {@link GeoJSONSourceDiff}. Operations are processed in a specific order to ensure predictable behavior:
  * 1. Remove operations (removeAll, remove)
  * 2. Add operations (add)
  * 3. Update operations (update)
+ * @returns an array of geometries that were affected by the diff - with the exception of removeAll which does not track any affected geometries.
  */
-export function applySourceDiff(updateable: Map<GeoJSONFeatureId, GeoJSON.Feature>, diff: GeoJSONSourceDiff, promoteId?: string): void {
+export function applySourceDiff(updateable: Map<GeoJSONFeatureId, GeoJSON.Feature>, diff: GeoJSONSourceDiff, promoteId?: string): GeoJSON.Geometry[] {
+    const affectedGeometries: GeoJSON.Geometry[] = [];
+
     if (diff.removeAll) {
         updateable.clear();
     }
     else if (diff.remove) {
         for (const id of diff.remove) {
+            const existing = updateable.get(id);
+            if (!existing) continue;
+
+            affectedGeometries.push(existing.geometry);
             updateable.delete(id);
         }
     }
@@ -140,16 +137,20 @@ export function applySourceDiff(updateable: Map<GeoJSONFeatureId, GeoJSON.Featur
     if (diff.add) {
         for (const feature of diff.add) {
             const id = getFeatureId(feature, promoteId);
-            if (id != null) {
-                updateable.set(id, feature);
-            }
+            if (id == null) continue;
+
+            const existing = updateable.get(id);
+            if (existing) affectedGeometries.push(existing.geometry);
+
+            affectedGeometries.push(feature.geometry);
+            updateable.set(id, feature);
         }
     }
 
     if (diff.update) {
         for (const update of diff.update) {
-            let feature = updateable.get(update.id);
-            if (!feature) continue;
+            const existing = updateable.get(update.id);
+            if (!existing) continue;
 
             const changeGeometry = !!update.newGeometry;
 
@@ -162,10 +163,12 @@ export function applySourceDiff(updateable: Map<GeoJSONFeatureId, GeoJSON.Featur
             if (!changeGeometry && !changeProps) continue;
 
             // clone once since we'll mutate
-            feature = {...feature};
+            affectedGeometries.push(existing.geometry);
+            const feature = {...existing};
             updateable.set(update.id, feature);
 
             if (changeGeometry) {
+                affectedGeometries.push(update.newGeometry);
                 feature.geometry = update.newGeometry;
             }
 
@@ -190,6 +193,8 @@ export function applySourceDiff(updateable: Map<GeoJSONFeatureId, GeoJSON.Featur
             }
         }
     }
+
+    return affectedGeometries;
 }
 
 /**

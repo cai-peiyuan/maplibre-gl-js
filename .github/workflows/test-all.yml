@@ -16,10 +16,10 @@ jobs:
     name: Code Hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v4
         with:
           node-version-file: '.nvmrc'
       - run: npm ci
@@ -46,10 +46,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v4
         with:
           node-version-file: '.nvmrc'
       - name: Start display server
@@ -74,10 +74,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v4
         with:
           node-version-file: '.nvmrc'
       - name: Disable AppArmor
@@ -119,10 +119,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v4
         with:
           node-version-file: '.nvmrc'
       - name: install CJK fonts for local ideographs render tests
@@ -167,10 +167,10 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v4
         with:
           node-version-file: '.nvmrc'
       - run: npm ci
@@ -182,10 +182,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [unit-tests, integration-tests, render-tests]
     steps:
-      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v4
         with:
           node-version-file: '.nvmrc'
 
@@ -208,7 +208,7 @@ jobs:
 
       - name: Code Coverage Annotation
         if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: ggilder/codecoverage@055ea578470d7704a861d9a7498fc55810925521
+        uses: ggilder/codecoverage@47c83daaf1d5a3190cad56363baf459c59114170
         with:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
           COVERAGE_FILE_PATH: "./coverage-merged/lcov.info"

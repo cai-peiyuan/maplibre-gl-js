@@ -4,6 +4,8 @@
 - _...Add new stuff here..._
 
 ### 🐞 Bug fixes
+- Fix getting the right zoom for getElevationForLngLat ([#6825](https://github.com/maplibre/maplibre-gl-js/pull/6825)) (by [@HarelM](https://github.com/HarelM))
+- Fix stale transform state being applied after changing `minZoom` or `maxZoom` due to old copies from `transformCameraUpdate` taking precedence. `transformCameraUpdate` is now called from `setMinZoom` and `setMaxZoom` to allow user to control subsequent changes to `zoom` [#6766](https://github.com/maplibre/maplibre-gl-js/issues/6766) (by [@Auspicus](https://github.com/Auspicus))
 - _...Add new stuff here..._
 
 ## 5.14.0
@@ -21,6 +23,7 @@
 - Fix `queryTerrainElevation` to use higher zoom level tiles when possible ([#6791](https://github.com/maplibre/maplibre-gl-js/pull/6791)) (by [@HarelM](https://github.com/HarelM))
 - Fix unwanted movement when moving a pitched terrain map at high latitudes; fix freezes when moving a pitched and rotated terrain map at low zoom ([#6775](https://github.com/maplibre/maplibre-gl-js/pull/6775)) (by [@larsmaxfield](https://github.com/larsmaxfield))
 - Fix issue with `static` modifier as part of mlt package ([#6796](https://github.com/maplibre/maplibre-gl-js/pull/6796)) (by [@HarelM](https://github.com/HarelM))
+- Fix GeoJSONSource tile reloading when updating data ([#6800](https://github.com/maplibre/maplibre-gl-js/pull/6800)) (by [@HarelM](https://github.com/HarelM))
 - `LngLatBounds#intersects` now returns `true` when bounds touch along an edge or at a corner ([#6802](https://github.com/maplibre/maplibre-gl-js/pull/6802)) (by [@lucaswoj](https://github.com/lucaswoj))
 
 ## 5.13.0

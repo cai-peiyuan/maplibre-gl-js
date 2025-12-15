@@ -982,7 +982,7 @@ export class Map extends Camera {
 
     calculateCameraOptionsFromTo(from: LngLat, altitudeFrom: number, to: LngLat, altitudeTo?: number): CameraOptions {
         if (altitudeTo == null && this.terrain) {
-            altitudeTo = this.terrain.getElevationForLngLat(to);
+            altitudeTo = this.terrain.getElevationForLngLat(to, this.transform);
         }
         return super.calculateCameraOptionsFromTo(from, altitudeFrom, to, altitudeTo);
     }
@@ -1162,10 +1162,10 @@ export class Map extends Camera {
         minZoom = minZoom === null || minZoom === undefined ? defaultMinZoom : minZoom;
 
         if (minZoom >= defaultMinZoom && minZoom <= this.transform.maxZoom) {
-            this.transform.setMinZoom(minZoom);
+            const tr = this._getTransformForUpdate();
+            tr.setMinZoom(minZoom);
+            this._applyUpdatedTransform(tr);
             this._update();
-
-            if (this.getZoom() < minZoom) this.setZoom(minZoom);
 
             return this;
 
@@ -1202,10 +1202,10 @@ export class Map extends Camera {
         maxZoom = maxZoom === null || maxZoom === undefined ? defaultMaxZoom : maxZoom;
 
         if (maxZoom >= this.transform.minZoom) {
-            this.transform.setMaxZoom(maxZoom);
+            const tr = this._getTransformForUpdate();
+            tr.setMaxZoom(maxZoom);
+            this._applyUpdatedTransform(tr);
             this._update();
-
-            if (this.getZoom() > maxZoom) this.setZoom(maxZoom);
 
             return this;
 
@@ -1787,8 +1787,9 @@ export class Map extends Camera {
      * Returns an array of MapGeoJSONFeature objects
      * representing visible features that satisfy the query parameters.
      *
-     * @param geometryOrOptions - (optional) The geometry of the query region:
-     * either a single point or southwest and northeast points describing a bounding box.
+     * @param geometryOrOptions - (optional) The geometry of the query region in pixel points within the map viewport:
+     * either a single pixel point or a pair of top-left and bottom-right pixel points describing a bounding box.
+     * The origin of the pixel points is at the top-left of the map viewport.
      * Omitting this parameter (i.e. calling {@link Map.queryRenderedFeatures} with zero arguments,
      * or with only a `options` argument) is equivalent to passing a bounding box encompassing the entire
      * map viewport.

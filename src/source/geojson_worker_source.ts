@@ -9,7 +9,7 @@ import {VectorTileWorkerSource} from './vector_tile_worker_source';
 import {createExpression} from '@maplibre/maplibre-gl-style-spec';
 import {isAbortError} from '../util/abort_error';
 import {toVirtualVectorTile} from './vector_tile_overzoomed';
-import {isUpdateableGeoJSON, type GeoJSONSourceDiff, applySourceDiff, toUpdateable, type GeoJSONFeatureId} from './geojson_source_diff';
+import {type GeoJSONSourceDiff, applySourceDiff, toUpdateable, type GeoJSONFeatureId} from './geojson_source_diff';
 import type {WorkerTileParameters, WorkerTileResult} from './worker_source';
 import type {LoadVectorTileResult} from './vector_tile_worker_source';
 import type {RequestParameters} from '../util/ajax';
@@ -130,6 +130,12 @@ export class GeoJSONWorkerSource extends VectorTileWorkerSource {
 
             const result: GeoJSONWorkerSourceLoadDataResult = {};
 
+            // Sending a large GeoJSON payload from the worker thread to the main thread
+            // is SLOW so we only do it if absolutely nescessary.
+            // The main thread already has a copy of this data UNLESS it was loaded
+            // from a URL.
+            if (params.request) result.data = data;
+
             this._finishPerformance(perf, params, result);
             return result;
         } catch (err) {
@@ -192,7 +198,7 @@ export class GeoJSONWorkerSource extends VectorTileWorkerSource {
      * @returns a promise that is resolved with the processes GeoJSON
      */
     async loadAndProcessGeoJSON(params: LoadGeoJSONParameters, abortController: AbortController): Promise<GeoJSON.GeoJSON> {
-        let data;
+        let data: GeoJSON.GeoJSON;
 
         if (params.request) {
             // Data is loaded from a fetchable URL
@@ -228,7 +234,7 @@ export class GeoJSONWorkerSource extends VectorTileWorkerSource {
      */
     async loadGeoJSONFromUrl(request: RequestParameters, promoteId: string, abortController: AbortController): Promise<GeoJSON.GeoJSON> {
         const response = await getJSON<GeoJSON.GeoJSON>(request, abortController);
-        this._dataUpdateable = isUpdateableGeoJSON(response.data, promoteId) ? toUpdateable(response.data, promoteId) : undefined;
+        this._dataUpdateable = toUpdateable(response.data, promoteId);
         return response.data;
     }
 
@@ -236,7 +242,7 @@ export class GeoJSONWorkerSource extends VectorTileWorkerSource {
      * Loads GeoJSON from a string and sets the sources updateable GeoJSON object.
      */
     _loadGeoJSONFromObject(data: GeoJSON.GeoJSON, promoteId: string): GeoJSON.GeoJSON {
-        this._dataUpdateable = isUpdateableGeoJSON(data, promoteId) ? toUpdateable(data, promoteId) : undefined;
+        this._dataUpdateable = toUpdateable(data, promoteId);
         return data;
     }
 
