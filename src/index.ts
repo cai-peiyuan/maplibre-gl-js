@@ -29,14 +29,14 @@ import {CanvasSource, type CanvasSourceSpecification} from './source/canvas_sour
 import {type CanonicalTileRange, type Coordinates, ImageSource, type UpdateImageOptions} from './source/image_source';
 import {RasterDEMTileSource} from './source/raster_dem_tile_source';
 import {RasterTileSource} from './source/raster_tile_source';
-import {VectorTileSource} from './source/vector_tile_source';
+import {VectorTileSource, type LoadTileResult} from './source/vector_tile_source';
 import {VideoSource} from './source/video_source';
 import {type Source, type SourceClass, addSourceType} from './source/source';
 import {addProtocol, removeProtocol} from './source/protocol_crud';
 import {type Dispatcher, getGlobalDispatcher} from './util/dispatcher';
 import {EdgeInsets, type PaddingOptions} from './geo/edge_insets';
 import {type MapTerrainEvent, type MapStyleImageMissingEvent, type MapStyleDataEvent, type MapSourceDataEvent, type MapLibreZoomEvent, type MapLibreEvent, type MapLayerTouchEvent, type MapLayerMouseEvent, type MapLayerEventType, type MapEventType, type MapDataEvent, type MapContextEvent, MapWheelEvent, MapTouchEvent, MapMouseEvent, type MapSourceDataType, type MapProjectionEvent} from './ui/events';
-import {BoxZoomHandler} from './ui/handler/box_zoom';
+import {BoxZoomHandler, type BoxZoomEndHandler, type BoxZoomHandlerOptions} from './ui/handler/box_zoom';
 import {DragRotateHandler} from './ui/handler/shim/drag_rotate';
 import {DragPanHandler, type DragPanOptions} from './ui/handler/shim/drag_pan';
 import {ScrollZoomHandler} from './ui/handler/scroll_zoom';
@@ -62,6 +62,7 @@ import type {Tile} from './tile/tile';
 import type {GeoJSONFeatureDiff, GeoJSONFeatureId, GeoJSONSourceDiff} from './source/geojson_source_diff';
 import type {QueryRenderedFeaturesOptions, QuerySourceFeatureOptions} from './source/query_features';
 import type {RequestTransformFunction, ResourceType} from './util/request_manager';
+import {EXTENT} from './data/extent';
 import type {OverscaledTileID} from './tile/tile_id';
 import type {PositionAnchor} from './ui/anchor';
 import type {ProjectionData} from './geo/projection/projection_data';
@@ -75,6 +76,7 @@ import type {ImageAtlas} from './render/image_atlas';
 import type {StyleGlyph} from './style/style_glyph';
 import type {FeatureIndex} from './data/feature_index';
 import type {DashEntry} from './render/line_atlas';
+import type {Painter} from './render/painter';
 const version = packageJSON.version;
 let accessToken = config.ACCESS_TOKEN;
 
@@ -228,6 +230,7 @@ function setBaseApiUrl(url: string) {
 
 export {
     Map,
+    Map as MapLibreMap,
     NavigationControl,
     NavControl,
     GeolocateControl,
@@ -254,6 +257,7 @@ export {
     RasterDEMTileSource,
     RasterTileSource,
     VectorTileSource,
+    LoadTileResult,
     VideoSource,
     EdgeInsets,
     BoxZoomHandler,
@@ -329,6 +333,8 @@ export {
     type ScaleControlOptions,
     type Unit,
     type AroundCenterOptions,
+    type BoxZoomEndHandler,
+    type BoxZoomHandlerOptions,
     type HandlerResult,
     type CustomRenderMethodInput,
     type ExpiryData,
@@ -385,6 +391,7 @@ export {
     type GeoJSONFeature,
     type CoveringTilesOptions,
     type DashEntry,
+    type Painter,
     setRTLTextPlugin,
     getRTLTextPluginStatus,
     prewarm,
