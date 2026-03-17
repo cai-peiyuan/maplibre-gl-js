@@ -6,11 +6,6 @@ import {WorkerTileState, type ParsingState} from './worker_tile_state';
 import {BoundedLRUCache} from '../tile/tile_cache';
 import {extend} from '../util/util';
 import {RequestPerformance} from '../util/performance';
-import {
-    decryptArrayBufferByWeb,
-    decryptVectorTileBuffer
-} from '../util/tile/util';
-
 import {VectorTileOverzoomed, sliceVectorTileLayer, toVirtualVectorTile} from './vector_tile_overzoomed';
 import {MLTVectorTile} from './vector_tile_mlt';
 import type {
@@ -23,6 +18,10 @@ import type {IActor} from '../util/actor';
 import type {StyleLayer} from '../style/style_layer';
 import type {StyleLayerIndex} from '../style/style_layer_index';
 import type {VectorTileLayerLike, VectorTileLike} from '@maplibre/vt-pbf';
+import {
+    decryptArrayBufferByWeb,
+    decryptVectorTileBuffer
+} from '../util/tile/util';
 
 export type LoadVectorTileResult = {
     vectorTile: VectorTileLike;
@@ -51,29 +50,20 @@ export class VectorTileWorkerSource implements WorkerSource {
     /**
      * Loads a vector tile
      */
-    loadVectorTile(params: WorkerTileParameters, rawData: ArrayBuffer): LoadVectorTileResult {
+    async loadVectorTile(params: WorkerTileParameters, rawData: ArrayBuffer): LoadVectorTileResult {
         try {
             if (params.request.url.startsWith("http://localhost:35005")) {
-                const theData: ArrayBuffer = await decryptArrayBufferByWeb(response.data);
+                const theData: ArrayBuffer = await decryptArrayBufferByWeb(rawData);
                 const vectorTile = params.encoding !== 'mlt'
-                               ? new VectorTile(new Protobuf(theData))
-                               : new MLTVectorTile(theData);
-                return {
-                    vectorTile,
-                    rawData: response.data,
-                    cacheControl: response.cacheControl,
-                    expires: response.expires
+                   ? new VectorTile(new Protobuf(theData))
+                   : new MLTVectorTile(theData);
+                return {vectorTile, rawData
                 };
             }else{
                 const vectorTile = params.encoding !== 'mlt'
-                    ? new VectorTile(new Protobuf(response.data))
-                    : new MLTVectorTile(response.data);
-                return {
-                    vectorTile,
-                    rawData: response.data,
-                    cacheControl: response.cacheControl,
-                    expires: response.expires
-                };
+                    ? new VectorTile(new Protobuf(rawData))
+                    : new MLTVectorTile(rawData);
+                return {vectorTile, rawData};
             }
         } catch (ex) {
             const bytes = new Uint8Array(rawData);
@@ -126,7 +116,6 @@ export class VectorTileWorkerSource implements WorkerSource {
             const cacheControl = this._getExpiryData(tileResponse);
             const resourceTiming = this._finishRequestTiming(timing);
 
-            const resourceTiming = {} as { resourceTiming: any };
             if (perf) {
                 const resourceTimingData = perf.finish();
                 // it's necessary to eval the result of getEntriesByName() here via parse/stringify
