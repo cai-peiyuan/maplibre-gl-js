@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>MapLibre GL JS debug page</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel='stylesheet' href='../../../dist/mapabc-gl.css'/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body, #map {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+<div id='map'></div>
+
+<script src='../../../dist/mapabc-gl-dev.js'></script>
+<script src='js/mapabc-config.js'></script>
+
+<script>
+
+    mapabcgl.accessToken = 'ec85d3648154874552835438ac6a02b2';
+    mapabcgl.config.accessToken = 'ec85d3648154874552835438ac6a02b2';
+    var map = window.map = new mapabcgl.Map({
+        container: 'map',
+        center: [116.2569, 39.9232],
+        zoom: 10,
+        maxPitch: 85,
+        // style: 'mapabc79w',
+        // style: 'mapabc://styles/mapabc79w',
+        // style: 'http://192.168.124.3:8000/js/mapabc22125.json',
+        style: 'http://localhost:9966/test/debug-pages/mapabc/js/cs_ys.json',
+        hash: true,
+        accessToken: 'ec85d3648154874552835438ac6a02b2' //map options
+    });
+
+    map.on('load', function () {
+        console.log('mapabcgl loaded..');
+    });
+
+    map.addControl(new mapabcgl.ScaleControl({unit: 'metric'}));
+    map.addControl(new mapabcgl.NavigationControl(
+        {showCompass: true}
+    ));
+    map.addControl(new mapabcgl.NavControl({
+        showZoom: true,
+        showCompass: true
+    }));
+
+    map.on('click', function (e) {
+        console.log(e);
+        const features = map.queryRenderedFeatures(e.point, {filter: ["==", "$type", "Polygon"]});
+        console.log(features);
+        e.preventDefault();
+    });
+
+
+</script>
+</body>
+</html>
