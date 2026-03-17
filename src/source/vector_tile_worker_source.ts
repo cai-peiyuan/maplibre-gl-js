@@ -116,19 +116,6 @@ export class VectorTileWorkerSource implements WorkerSource {
             const cacheControl = this._getExpiryData(tileResponse);
             const resourceTiming = this._finishRequestTiming(timing);
 
-            if (perf) {
-                const resourceTimingData = perf.finish();
-                // it's necessary to eval the result of getEntriesByName() here via parse/stringify
-                // late evaluation in the main thread causes TypeError: illegal invocation
-                if (resourceTimingData)
-                    resourceTiming.resourceTiming = JSON.parse(JSON.stringify(resourceTimingData));
-            }
-
-            workerTile.vectorTile = response.vectorTile;
-            const parsePromise = workerTile.parse(response.vectorTile, this.layerIndex, this.availableImages, this.actor, params.subdivisionGranularity);
-            this.loaded[tileUid] = workerTile;
-            // keep the original fetching state so that reload tile can pick it up if the original parse is cancelled by reloads' parse
-            this.fetching[tileUid] = {rawTileData, cacheControl, resourceTiming};
             workerTile.vectorTile = vectorTile;
             this.tileState.markLoaded(uid, workerTile);
 
