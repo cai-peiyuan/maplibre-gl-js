@@ -18,10 +18,6 @@ import type {IActor} from '../util/actor';
 import type {StyleLayer} from '../style/style_layer';
 import type {StyleLayerIndex} from '../style/style_layer_index';
 import type {VectorTileLayerLike, VectorTileLike} from '@maplibre/vt-pbf';
-import {
-    decryptArrayBufferByWeb,
-    decryptVectorTileBuffer
-} from '../util/tile/util';
 
 export type LoadVectorTileResult = {
     vectorTile: VectorTileLike;
@@ -50,21 +46,13 @@ export class VectorTileWorkerSource implements WorkerSource {
     /**
      * Loads a vector tile
      */
-    async loadVectorTile(params: WorkerTileParameters, rawData: ArrayBuffer): LoadVectorTileResult {
+    loadVectorTile(params: WorkerTileParameters, rawData: ArrayBuffer): LoadVectorTileResult {
         try {
-            if (params.request.url.startsWith("http://localhost:35005")) {
-                const theData: ArrayBuffer = await decryptArrayBufferByWeb(rawData);
-                const vectorTile = params.encoding !== 'mlt'
-                   ? new VectorTile(new Protobuf(theData))
-                   : new MLTVectorTile(theData);
-                return {vectorTile, rawData
-                };
-            }else{
-                const vectorTile = params.encoding !== 'mlt'
-                    ? new VectorTile(new Protobuf(rawData))
-                    : new MLTVectorTile(rawData);
-                return {vectorTile, rawData};
-            }
+            const vectorTile = params.encoding !== 'mlt'
+                ? new VectorTile(new Protobuf(rawData))
+                : new MLTVectorTile(rawData);
+
+            return {vectorTile, rawData};
         } catch (ex) {
             const bytes = new Uint8Array(rawData);
             const isGzipped = bytes[0] === 0x1f && bytes[1] === 0x8b;
