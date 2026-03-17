@@ -12,7 +12,6 @@ import json from '@rollup/plugin-json';
 import typescript from '@rollup/plugin-typescript';
 
 import packageJson from './package.json' with {type: 'json'};
-//import {importAssertions} from 'acorn-import-assertions';
 const version = packageJson.version;
 
 const {BUILD, MAPABC, EXPORTNAMESPACE, MINIFY} = process.env;
@@ -200,7 +199,6 @@ const config: RollupOptions[] = [{
         throw message;
     },
     treeshake: production,
-    //acornInjectPlugins: [importAssertions],
     plugins: pluginsForRollup
 }, {
     // Next, bundle together the three "chunks" produced in the previous pass
